@@ -84,6 +84,29 @@ set_optional_property() {
 
 }
 
+# Print error message regarding missing required variables for MySQL authentication
+mysql_missing_vars() {
+   cat <<END
+FATAL: Missing required environment variables
+-------------------------------------------------------------------------------
+If using a MySQL database, you must provide each of the following
+environment variables or their corresponding Docker secrets by appending _FILE
+to the environment variable, and setting the value to the path of the 
+corresponding secret:
+
+    MYSQL_USER         The user to authenticate as when connecting to
+                       MySQL.
+
+    MYSQL_PASSWORD     The password to use when authenticating with MySQL as
+                       MYSQL_USER.
+
+    MYSQL_DATABASE     The name of the MySQL database to use for Guacamole
+                       authentication.
+END
+    exit 1;
+}
+
+
 ##
 ## Adds properties to guacamole.properties which select the MySQL
 ## authentication provider, and configure it to connect to the linked MySQL
@@ -125,32 +148,38 @@ END
         exit 1;
     fi
 
-    # Verify required parameters are present
-    if [ -z "$MYSQL_USER" -o -z "$MYSQL_PASSWORD" -o -z "$MYSQL_DATABASE" ]; then
-        cat <<END
-FATAL: Missing required environment variables
--------------------------------------------------------------------------------
-If using a MySQL database, you must provide each of the following
-environment variables:
 
-    MYSQL_USER         The user to authenticate as when connecting to
-                       MySQL.
+    # Verify that the required Docker secrets are present, else, default to their normal environment variables
+    if [ -n "$MYSQL_USER_FILE" ]; then
+        set_property "mysql-username" `cat $MYSQL_USER_FILE`
+    elif [ -n "$MYSQL_USER" ]; then
+        set_property "mysql-username" "$MYSQL_USER"
+    else
+        mysql_missing_vars
+        exit 1;
+    fi
+    
+    if [ -n "$MYSQL_PASSWORD_FILE" ]; then
+        set_property "mysql-password" `cat $MYSQL_PASSWORD_FILE`
+    elif [ -n "$MYSQL_PASSWORD" ]; then
+        set_property "mysql-password" "$MYSQL_PASSWORD"
+    else
+        mysql_missing_vars
+        exit 1;
+    fi
 
-    MYSQL_PASSWORD     The password to use when authenticating with MySQL as
-                       MYSQL_USER.
-
-    MYSQL_DATABASE     The name of the MySQL database to use for Guacamole
-                       authentication.
-END
+    if [ -n "$MYSQL_DATABASE_FILE" ]; then
+        set_property "mysql-database" `cat $MYSQL_DATABASE_FILE`
+    elif [ -n "$MYSQL_DATABASE" ]; then
+        set_property "mysql-database" "$MYSQL_DATABASE"
+    else
+        mysql_missing_vars
         exit 1;
     fi
 
     # Update config file
     set_property "mysql-hostname" "$MYSQL_HOSTNAME"
     set_property "mysql-port"     "$MYSQL_PORT"
-    set_property "mysql-database" "$MYSQL_DATABASE"
-    set_property "mysql-username" "$MYSQL_USER"
-    set_property "mysql-password" "$MYSQL_PASSWORD"
 
     set_optional_property               \
         "mysql-absolute-max-connections" \
@@ -172,10 +201,36 @@ END
         "mysql-default-max-group-connections-per-user" \
         "$MYSQL_DEFAULT_MAX_GROUP_CONNECTIONS_PER_USER"
 
+    set_optional_property     \
+        "mysql-user-required" \
+        "$MYSQL_USER_REQUIRED"
+
     # Add required .jar files to GUACAMOLE_LIB and GUACAMOLE_EXT
     ln -s /opt/guacamole/mysql/mysql-connector-*.jar "$GUACAMOLE_LIB"
     ln -s /opt/guacamole/mysql/guacamole-auth-*.jar "$GUACAMOLE_EXT"
 
+}
+
+# Print error message regarding missing required variables for PostgreSQL authentication
+postgres_missing_vars() {
+    cat <<END
+FATAL: Missing required environment variables
+-------------------------------------------------------------------------------
+If using a PostgreSQL database, you must provide each of the following
+environment variables or their corresponding Docker secrets by appending _FILE
+to the environment variable, and setting the value to the path of the 
+corresponding secret:
+
+    POSTGRES_USER      The user to authenticate as when connecting to
+                       PostgreSQL.
+
+    POSTGRES_PASSWORD  The password to use when authenticating with PostgreSQL
+                       as POSTGRES_USER.
+
+    POSTGRES_DATABASE  The name of the PostgreSQL database to use for Guacamole
+                       authentication.
+END
+    exit 1;
 }
 
 ##
@@ -221,32 +276,37 @@ END
         exit 1;
     fi
 
-    # Verify required parameters are present
-    if [ -z "$POSTGRES_USER" -o -z "$POSTGRES_PASSWORD" -o -z "$POSTGRES_DATABASE" ]; then
-        cat <<END
-FATAL: Missing required environment variables
--------------------------------------------------------------------------------
-If using a PostgreSQL database, you must provide each of the following
-environment variables:
+    # Verify that the required Docker secrets are present, else, default to their normal environment variables
+    if [ -n "$POSTGRES_USER_FILE" ]; then
+        set_property "postgresql-username" `cat $POSTGRES_USER_FILE`
+    elif [ -n "$POSTGRES_USER" ]; then
+        set_property "postgresql-username" "$POSTGRES_USER"
+    else
+        postgres_missing_vars
+        exit 1;
+    fi
+    
+    if [ -n "$POSTGRES_PASSWORD_FILE" ]; then
+        set_property "postgresql-password" `cat $POSTGRES_PASSWORD_FILE`
+    elif [ -n "$POSTGRES_PASSWORD" ]; then
+        set_property "postgresql-password" "$POSTGRES_PASSWORD"
+    else
+        postgres_missing_vars
+        exit 1;
+    fi
 
-    POSTGRES_USER      The user to authenticate as when connecting to
-                       PostgreSQL.
-
-    POSTGRES_PASSWORD  The password to use when authenticating with PostgreSQL
-                       as POSTGRES_USER.
-
-    POSTGRES_DATABASE  The name of the PostgreSQL database to use for Guacamole
-                       authentication.
-END
+    if [ -n "$POSTGRES_DATABASE_FILE" ]; then
+        set_property "postgresql-database" `cat $POSTGRES_DATABASE_FILE`
+    elif [ -n "$POSTGRES_DATABASE" ]; then
+        set_property "postgresql-database" "$POSTGRES_DATABASE"
+    else
+        postgres_missing_vars
         exit 1;
     fi
 
     # Update config file
     set_property "postgresql-hostname" "$POSTGRES_HOSTNAME"
     set_property "postgresql-port"     "$POSTGRES_PORT"
-    set_property "postgresql-database" "$POSTGRES_DATABASE"
-    set_property "postgresql-username" "$POSTGRES_USER"
-    set_property "postgresql-password" "$POSTGRES_PASSWORD"
 
     set_optional_property               \
         "postgresql-absolute-max-connections" \
@@ -267,6 +327,10 @@ END
     set_optional_property                                   \
         "postgresql-default-max-group-connections-per-user" \
         "$POSTGRES_DEFAULT_MAX_GROUP_CONNECTIONS_PER_USER"
+
+    set_optional_property          \
+        "postgresql-user-required" \
+        "$POSTGRES_USER_REQUIRED"
 
     # Add required .jar files to GUACAMOLE_LIB and GUACAMOLE_EXT
     ln -s /opt/guacamole/postgresql/postgresql-*.jar "$GUACAMOLE_LIB"
@@ -303,23 +367,31 @@ END
     set_property          "ldap-hostname"           "$LDAP_HOSTNAME"
     set_optional_property "ldap-port"               "$LDAP_PORT"
     set_optional_property "ldap-encryption-method"  "$LDAP_ENCRYPTION_METHOD"
-    set_property          "ldap-user-base-dn"       "$LDAP_USER_BASE_DN"
-    set_optional_property "ldap-username-attribute" "$LDAP_USERNAME_ATTRIBUTE"
-    set_optional_property "ldap-member-attribute"   "$LDAP_MEMBER_ATTRIBUTE"
-    set_optional_property "ldap-group-base-dn"      "$LDAP_GROUP_BASE_DN"
-    set_optional_property "ldap-config-base-dn"     "$LDAP_CONFIG_BASE_DN"
-
-    set_optional_property     \
-        "ldap-search-bind-dn" \
-        "$LDAP_SEARCH_BIND_DN"
+    set_optional_property "ldap-max-search-results" "$LDAP_MAX_SEARCH_RESULTS"
+    set_optional_property "ldap-search-bind-dn"     "$LDAP_SEARCH_BIND_DN"
 
     set_optional_property           \
         "ldap-search-bind-password" \
         "$LDAP_SEARCH_BIND_PASSWORD"
 
-    set_optional_property         \
-        "ldap-user-search-filter" \
-        "$LDAP_USER_SEARCH_FILTER"
+    set_property          "ldap-user-base-dn"       "$LDAP_USER_BASE_DN"
+    set_optional_property "ldap-username-attribute" "$LDAP_USERNAME_ATTRIBUTE"
+    set_optional_property "ldap-member-attribute"   "$LDAP_MEMBER_ATTRIBUTE"
+    set_optional_property "ldap-user-search-filter" "$LDAP_USER_SEARCH_FILTER"
+    set_optional_property "ldap-config-base-dn"     "$LDAP_CONFIG_BASE_DN"
+    set_optional_property "ldap-group-base-dn"      "$LDAP_GROUP_BASE_DN"
+
+    set_optional_property           \
+        "ldap-group-name-attribute" \
+        "$LDAP_GROUP_NAME_ATTRIBUTE"
+
+    set_optional_property           \
+        "ldap-dereference-aliases"  \
+        "$LDAP_DEREFERENCE_ALIASES"
+
+    set_optional_property "ldap-follow-referrals"   "$LDAP_FOLLOW_REFERRALS"
+    set_optional_property "ldap-max-referral-hops"  "$LDAP_MAX_REFERRAL_HOPS"
+    set_optional_property "ldap-operation-timeout"  "$LDAP_OPERATION_TIMEOUT"
 
     # Add required .jar files to GUACAMOLE_EXT
     ln -s /opt/guacamole/ldap/guacamole-auth-*.jar "$GUACAMOLE_EXT"
@@ -511,6 +583,7 @@ END
 start_guacamole() {
 
     # Install webapp
+    rm -Rf /usr/local/tomcat/webapps/${WEBAPP_CONTEXT:-guacamole}
     ln -sf /opt/guacamole/guacamole.war /usr/local/tomcat/webapps/${WEBAPP_CONTEXT:-guacamole}.war
 
     # Start tomcat
@@ -588,13 +661,13 @@ set_property "guacd-port"     "$GUACD_PORT"
 INSTALLED_AUTH=""
 
 # Use MySQL if database specified
-if [ -n "$MYSQL_DATABASE" ]; then
+if [ -n "$MYSQL_DATABASE" -o -n "$MYSQL_DATABASE_FILE" ]; then
     associate_mysql
     INSTALLED_AUTH="$INSTALLED_AUTH mysql"
 fi
 
 # Use PostgreSQL if database specified
-if [ -n "$POSTGRES_DATABASE" ]; then
+if [ -n "$POSTGRES_DATABASE" -o -n "$POSTGRES_DATABASE_FILE" ]; then
     associate_postgresql
     INSTALLED_AUTH="$INSTALLED_AUTH postgres"
 fi
@@ -637,6 +710,12 @@ fi
 # Use Duo if specified.
 if [ -n "$DUO_API_HOSTNAME" ]; then
     associate_duo
+fi
+
+# Set logback level if specified
+if [ -n "$LOGBACK_LEVEL" ]; then
+    unzip -o -j /opt/guacamole/guacamole.war WEB-INF/classes/logback.xml -d $GUACAMOLE_HOME
+    sed -i "s/level=\"info\"/level=\"$LOGBACK_LEVEL\"/" $GUACAMOLE_HOME/logback.xml
 fi
 
 #

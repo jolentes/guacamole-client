@@ -18,6 +18,7 @@
  */
 
 .keyboard-container {
+
     text-align: center;
 
     width: 100%;
@@ -29,4 +30,5 @@
     opacity: 0.85;
 
     z-index: 1;
+
 }

@@ -36,6 +36,7 @@ import org.apache.guacamole.net.auth.Credentials;
 import org.apache.guacamole.net.auth.UserContext;
 import org.apache.guacamole.net.auth.credentials.CredentialsInfo;
 import org.apache.guacamole.net.auth.credentials.GuacamoleCredentialsException;
+import org.apache.guacamole.net.auth.credentials.GuacamoleInsufficientCredentialsException;
 import org.apache.guacamole.net.auth.credentials.GuacamoleInvalidCredentialsException;
 import org.apache.guacamole.net.event.AuthenticationFailureEvent;
 import org.apache.guacamole.net.event.AuthenticationSuccessEvent;
@@ -106,10 +107,15 @@ public class AuthenticationService {
     private static final String IP_ADDRESS_REGEX = "(" + IPV4_ADDRESS_REGEX + "|" + IPV6_ADDRESS_REGEX + ")";
 
     /**
+     * Regular expression which matches any Port Number.
+     */
+    private static final String PORT_NUMBER_REGEX = "(:[0-9]{1,5})?";
+    
+    /**
      * Pattern which matches valid values of the de-facto standard
      * "X-Forwarded-For" header.
      */
-    private static final Pattern X_FORWARDED_FOR = Pattern.compile("^" + IP_ADDRESS_REGEX + "(, " + IP_ADDRESS_REGEX + ")*$");
+    private static final Pattern X_FORWARDED_FOR = Pattern.compile("^" + IP_ADDRESS_REGEX + PORT_NUMBER_REGEX + "(, " + IP_ADDRESS_REGEX + PORT_NUMBER_REGEX + ")*$");
 
     /**
      * Returns a formatted string containing an IP address, or list of IP
@@ -170,7 +176,13 @@ public class AuthenticationService {
                     return authenticatedUser;
             }
 
-            // First failure takes priority for now
+            // Insufficient credentials should take precedence
+            catch (GuacamoleInsufficientCredentialsException e) {
+                if (authFailure == null || authFailure instanceof GuacamoleInvalidCredentialsException)
+                    authFailure = e;
+            }
+            
+            // Catch other credentials exceptions and assign the first one
             catch (GuacamoleCredentialsException e) {
                 if (authFailure == null)
                     authFailure = e;
